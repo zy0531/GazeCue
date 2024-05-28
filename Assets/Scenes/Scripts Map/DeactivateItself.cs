@@ -19,7 +19,7 @@ public class DeactivateItself : MonoBehaviour
     {
         if (this.gameObject.activeSelf != oldStatus)
         {
-            coroutine = WaitAndDeactivate(3f);
+            coroutine = WaitAndDeactivate(2f);
             StartCoroutine(coroutine);
         }
         oldStatus = this.gameObject.activeSelf;

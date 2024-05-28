@@ -151,7 +151,7 @@ public class EyeTrackingExploration : MonoBehaviour
 
     void Update()
     {
-        Debug.Log("Gaze allowed: " + VarjoEyeTracking.IsGazeAllowed() + "Gaze calibrated: " + VarjoEyeTracking.IsGazeCalibrated());
+        // Debug.Log("Gaze allowed: " + VarjoEyeTracking.IsGazeAllowed() + "Gaze calibrated: " + VarjoEyeTracking.IsGazeCalibrated());
         if (logging && printFramerate)
         {
             gazeTimer += Time.deltaTime;
@@ -179,13 +179,13 @@ public class EyeTrackingExploration : MonoBehaviour
         // Check if gaze is allowed
         if (Input.GetKeyDown(checkGazeAllowed))
         {
-            Debug.Log("Gaze allowed: " + VarjoEyeTracking.IsGazeAllowed());
+            // Debug.Log("Gaze allowed: " + VarjoEyeTracking.IsGazeAllowed());
         }
 
         // Check if gaze is calibrated
         if (Input.GetKeyDown(checkGazeCalibrated))
         {
-            Debug.Log("Gaze calibrated: " + VarjoEyeTracking.IsGazeCalibrated());
+            // Debug.Log("Gaze calibrated: " + VarjoEyeTracking.IsGazeCalibrated());
         }
 
         // Toggle gaze target visibility
@@ -204,7 +204,7 @@ public class EyeTrackingExploration : MonoBehaviour
             }
 
             // Show gaze target (change default to: false)
-            gazeTarget.SetActive(false);
+            // gazeTarget.SetActive(false);
 
             if (gazeDataSource == GazeDataSource.InputSubsystem)
             {
