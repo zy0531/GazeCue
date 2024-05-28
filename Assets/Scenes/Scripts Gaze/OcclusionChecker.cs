@@ -39,9 +39,9 @@ public class OcclusionChecker : MonoBehaviour
             }
         }
 
-        Debug.Log($"{occludedPoints} out of {samplePoints.Length} points are occluded.");
+        // Debug.Log($"{occludedPoints} out of {samplePoints.Length} points are occluded.");
         float occlusionRatio = (float)occludedPoints / samplePoints.Length;
-        Debug.Log("The occlusionRatio is" + occlusionRatio.ToString("F2"));
+        // Debug.Log("The occlusionRatio is" + occlusionRatio.ToString("F2"));
         return occlusionRatio;
     }
 

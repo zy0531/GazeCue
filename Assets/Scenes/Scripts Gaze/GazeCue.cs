@@ -5,11 +5,7 @@ using UnityEngine;
 
 public class GazeCue : MonoBehaviour
 {
-    /*[SerializeField] GameObject landmarksParent;
-    [SerializeField] GameObject landmarksReplicasParent;*/
     [SerializeField] LayerMask layermask;
-    [SerializeField] GameObject gazeIndicator;
-    public float fixationLength = 1f;
 
     /// <summary>
     /// dwell implementation
@@ -29,6 +25,8 @@ public class GazeCue : MonoBehaviour
     Vector3 gazeDirection; // The eye gaze direction
     Vector3 headDirection; // The head forward direction
 
+    bool isDwellDetected = false;
+
 
     /// <summary>
     /// find the counterpart of a given landmark or landmarkReplica
@@ -40,7 +38,7 @@ public class GazeCue : MonoBehaviour
     /// check the occlusion ratio of a landmark
     /// </summary>
     [SerializeField] OcclusionChecker occlusionChecker;
-    public float occlusionThreshold = 0.2f;
+    public float occlusionThreshold = 0.6f;
 
 
 
@@ -48,7 +46,7 @@ public class GazeCue : MonoBehaviour
     void Start()
     {
         gaze = GetComponent<EyeTrackingExploration>();
-        n = (int)(dwellTimeThreshold * sampleRate) + 1;
+        n = (int)(dwellTimeThreshold * sampleRate);
         gazeDirections = new Queue<Vector3>(n);
         headDirections = new Queue<Vector3>(n);
 
@@ -78,26 +76,41 @@ public class GazeCue : MonoBehaviour
         {
             float angularDeviation = CalculateAngularDeviation(gazeDirections, headDirections);
 
-            if (angularDeviation < deviationThreshold)
+            if (angularDeviation <= deviationThreshold)
             {
-                Debug.Log("Gaze dwell detected!");
-                DetectCollidedObjects();
+                if (!isDwellDetected)
+                {
+                    isDwellDetected = true;
+                    Debug.Log("Gaze dwell detected!");
+                    Vector3 gazeDirectionCentroid = GetCentroid(gazeDirections);
+                    DetectCollidedObjects(gazeDirectionCentroid);
+                }   
+            }
+            else
+            {
+                isDwellDetected = false;
             }
         }
     }
 
 
 
-    void DetectCollidedObjects()
+    void DetectCollidedObjects(Vector3 gazeDirectionCentroid)
     {
         // Perform a RaycastAll from the gaze origin in the direction of the gaze
-        RaycastHit[] hits = Physics.RaycastAll(gazeOrigin, gazeDirection, Mathf.Infinity, layermask);
+        RaycastHit[] hits = Physics.RaycastAll(gazeOrigin, gazeDirectionCentroid, Mathf.Infinity, layermask);
 
-        // Process the detected game objects
+        // Process the detected game objects & Trigger Visual Effect
         foreach (RaycastHit hit in hits)
         {
             TriggerVisualEffect(hit);
         }
+
+        // Detect New Dwell Again
+        isDwellDetected = false;
+        gazeDirections.Clear();
+        headDirections.Clear();
+
     }
 
     void TriggerVisualEffect(RaycastHit hit)
@@ -108,7 +121,7 @@ public class GazeCue : MonoBehaviour
         {
             Debug.Log("Counterpart found: " + counterpart_gameobject.name);
             
-            // 1. Activate the visual feedback on the hit gameobject & its counterpart gameobject
+            // Activate the visual feedback on the hit gameobject & its counterpart gameobject
             // Check occlusion ratio to determine which visual feedback to be activated
             if (occlusionChecker.CheckOcclusion(hit.transform.gameObject) < occlusionThreshold && occlusionChecker.CheckOcclusion(counterpart_gameobject) < occlusionThreshold)
             {
@@ -176,6 +189,26 @@ public class GazeCue : MonoBehaviour
         float averageDeviation = sum / gazeArray.Length;
         Debug.Log($"Average Angular Deviation: {averageDeviation}");
         return averageDeviation;
+    }
+
+    Vector3 GetCentroid(Queue<Vector3> vectors)
+    {
+        if (vectors.Count == 0)
+        {
+            Debug.LogError("Queue is empty, cannot calculate centroid.");
+            return Vector3.zero;
+        }
+
+        Vector3 sum = Vector3.zero;
+
+        foreach (Vector3 vector in vectors)
+        {
+            sum += vector;
+        }
+
+        Vector3 centroid = sum / vectors.Count;
+
+        return centroid;
     }
 
 

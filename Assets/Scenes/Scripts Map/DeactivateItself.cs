@@ -6,6 +6,7 @@ public class DeactivateItself : MonoBehaviour
 {
     IEnumerator coroutine;
     bool oldStatus;
+    float waitTime = 4f;
 
     // Start is called before the first frame update
     void Start()
@@ -19,7 +20,7 @@ public class DeactivateItself : MonoBehaviour
     {
         if (this.gameObject.activeSelf != oldStatus)
         {
-            coroutine = WaitAndDeactivate(2f);
+            coroutine = WaitAndDeactivate(waitTime);
             StartCoroutine(coroutine);
         }
         oldStatus = this.gameObject.activeSelf;
