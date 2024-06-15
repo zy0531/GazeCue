@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -10,7 +11,6 @@ public class TeleportToRoute : MonoBehaviour
     [SerializeField] Transform startPosition;
     [SerializeField] GameObject xrRig;
     [SerializeField] Locomotion locomotion;
-
 
     bool hasStarted;
 
@@ -26,15 +26,23 @@ public class TeleportToRoute : MonoBehaviour
     {
 
         // use "T" on the keyboard to teleport to the start position
-        if (Input.GetKeyUp(KeyCode.T))
+/*        if (Input.GetKeyUp(KeyCode.T))
         {
             if(!hasStarted)
             {
-                xrRig.transform.position = startPosition.position;
+                TeleportTo(startPosition);
                 locomotion.enabled = true;
                 hasStarted = true;
                 SharedVariables.hasStarted = hasStarted;
             }  
-        }
+        }*/
     }
+
+    
+
+    public void TeleportTo(Transform transform)
+    {
+        xrRig.transform.position = transform.position;
+    }
+
 }

@@ -2,6 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.Linq;
+
+
 
 
 public class GazeCue : MonoBehaviour
@@ -12,29 +15,46 @@ public class GazeCue : MonoBehaviour
     /// dwell implementation
     /// </summary>
     public Transform xrCamera; // The camera representing the head direction
-    public float dwellTimeThreshold = 0.2f; // Threshold for dwell time
+    // public float dwellTimeThreshold = 0.2f; // Threshold for dwell time
+    public float nearFarThreshold = 5f;
+    public float dwellTimeThreshold_near;
+    public float dwellTimeThreshold_far;
     public float deviationThreshold = 0.3f; // Threshold for angular deviation (in degrees) to consider it as a dwell
 
-    public float deactivateTime = 4f;
+    public float deactivateTime = 4f; // Lasting time of visual effect
 
-    public float sampleRate = 200; // The frequency of eye tracker
-    int n; // Number of samples to consider for dwell detection = dwellTimeThreshold * sampleRate
+    /// <summary>
+    /// Number of samples to consider for dwell detection ---> n = dwellTimeThreshold * sampleRate   
+    /// </summary>
+    public float sampleRate = 200; // The frequency of GAZE SAMPLE
+    
+    int n_near; 
+    int n_far;
+    int n; // n_max
+    int n_min;
 
     Queue<Vector3> gazeDirections;
     Queue<Vector3> headDirections;
 
-    EyeTrackingExploration gaze;
+    [SerializeField] EyeTrackingGazePilot gaze;
     Vector3 gazeOrigin;
     Vector3 gazeDirection; // The eye gaze direction
     Vector3 headDirection; // The head forward direction
 
-    // bool isDwellDetected = false;
+    public int visualFeedbackCount_near { get; set; }
+    public int visualFeedbackCount_far { get; set; }
+
 
     /// <summary>
     /// find the counterpart of a given landmark or landmarkReplica
     /// </summary>
     [SerializeField] CounterpartFinder counterpartFinder;
     GameObject counterpart_gameobject;
+
+    /// <summary>
+    /// define the mechanisms of the AR visual effect display
+    /// </summary>
+    public DisplayMechanismType displayMechanismType;
 
 
     /// <summary>
@@ -45,6 +65,9 @@ public class GazeCue : MonoBehaviour
 
     // save the previous gaze hit objects
     RaycastHit[] prevHits = new RaycastHit[0];
+
+
+
 
 
     /// <summary>
@@ -63,7 +86,7 @@ public class GazeCue : MonoBehaviour
             {
                 _isDwellDetected = value;
                 OnDwellDetectedChanged?.Invoke(_isDwellDetected);
-                Debug.Log("OnDwellDetectedChanged event invoked. New value: " + _isDwellDetected);
+                // Debug.Log("OnDwellDetectedChanged event invoked. New value: " + _isDwellDetected);
             }
         }
     }
@@ -98,18 +121,46 @@ public class GazeCue : MonoBehaviour
 
 
 
-    // Start is called before the first frame update
-    void Start()
-    {
-        gaze = GetComponent<EyeTrackingExploration>();
-        n = (int)(dwellTimeThreshold * sampleRate);
-        gazeDirections = new Queue<Vector3>(n);
-        headDirections = new Queue<Vector3>(n);
 
+    public Vector3 GetGazeOrigin()
+    {
+        return gazeOrigin;
+    }
+    public Vector3 GetGazeDirection()
+    {
+        return gazeDirection;
     }
 
-    // Update is called once per frame
-    void Update()
+
+    public void SetDwellTimeThreshold(float dwellTimeThreshold_near_input, float dwellTimeThreshold_far_input)
+    {
+        dwellTimeThreshold_near = dwellTimeThreshold_near_input/1000f;
+        dwellTimeThreshold_far = dwellTimeThreshold_far_input/1000f;
+
+        n_near = (int)(dwellTimeThreshold_near * sampleRate);
+        n_far = (int)(dwellTimeThreshold_far * sampleRate);
+        n = Mathf.Max(n_near, n_far);
+        gazeDirections = new Queue<Vector3>(n);
+        headDirections = new Queue<Vector3>(n);
+        
+    }
+
+
+
+    // Start is called before the first frame update
+    void Awake()
+    {
+        // n = (int)(dwellTimeThreshold * sampleRate);
+        /*n_near = (int)(dwellTimeThreshold_near * sampleRate);
+        n_far = (int)(dwellTimeThreshold_far * sampleRate);
+        n = Mathf.Max(n_near, n_far);
+        n_min = Mathf.Min(n_near, n_far);
+        gazeDirections = new Queue<Vector3>(n);
+        headDirections = new Queue<Vector3>(n);*/
+    }
+
+    // Fixed Timestamp 0.005s 
+    void FixedUpdate()
     {
         // Read in the gaze origin and gaze direction (world coordinate) from EyeTrackingExample
         gazeOrigin = gaze.getRayOrigin();
@@ -128,78 +179,248 @@ public class GazeCue : MonoBehaviour
         headDirections.Enqueue(headDirection);
 
         // Check for dwell only after we have enough samples
-        if (gazeDirections.Count == n && headDirections.Count == n)
+        if (n_near <= n_far)
+        {
+            if (gazeDirections.Count == n_near && headDirections.Count == n_near)
+            {
+                float angularDeviation = CalculateAngularDeviation(gazeDirections, headDirections);
+
+                if (angularDeviation <= deviationThreshold)
+                {
+                    isSaccadeDetected = false;
+
+                    if (!isDwellDetected)
+                    {
+                        isDwellDetected = true;
+                        Vector3 gazeDirectionCentroid = GetCentroid(gazeDirections);
+                        // Debug.Log($"Near gaze dwell detected! The sample num is {gazeDirections.Count}");
+                        if (DetectCollidedObjects(gazeDirectionCentroid, DwelledObject.Near))
+                        {
+                            // Debug.Log($"Near gaze dwell detected! Near Visual Effect Triggered!!!!");
+                            visualFeedbackCount_near++;
+                            gazeDirections.Clear();
+                            headDirections.Clear();
+                        }
+                    }
+                }
+                else
+                {
+                    isDwellDetected = false;
+                    isSaccadeDetected = true;
+                    // Debug.Log("Saccades! Start the countdown of the visual effect deactivation!");
+                }
+            }
+
+            if (gazeDirections.Count == n_far && headDirections.Count == n_far)
+            {
+                float angularDeviation = CalculateAngularDeviation(gazeDirections, headDirections);
+
+                if (angularDeviation <= deviationThreshold)
+                {
+                    isSaccadeDetected = false;
+
+                    if (!isDwellDetected)
+                    {
+                        isDwellDetected = true;
+                        Vector3 gazeDirectionCentroid = GetCentroid(gazeDirections);
+                        // Debug.Log($"Far gaze dwell detected! The sample num is {gazeDirections.Count}");
+                        if (DetectCollidedObjects(gazeDirectionCentroid, DwelledObject.Far))
+                        {
+                            // Debug.Log($"Far gaze dwell detected! Far Visual Effect Triggered!!!!");
+                            visualFeedbackCount_far++;
+                        }
+                        gazeDirections.Clear();
+                        headDirections.Clear();
+                    }
+                }
+                else
+                {
+                    isDwellDetected = false;
+                    isSaccadeDetected = true;
+                    // Debug.Log("Saccades! Start the countdown of the visual effect deactivation!");
+                }
+            }
+
+        }
+        else
+        {
+            if (gazeDirections.Count == n_far && headDirections.Count == n_far)
+            {
+                float angularDeviation = CalculateAngularDeviation(gazeDirections, headDirections);
+
+                if (angularDeviation <= deviationThreshold)
+                {
+                    isSaccadeDetected = false;
+
+                    if (!isDwellDetected)
+                    {
+                        isDwellDetected = true;
+                        Vector3 gazeDirectionCentroid = GetCentroid(gazeDirections);
+                        // Debug.Log($"Far gaze dwell detected! The sample num is {gazeDirections.Count}");
+                        if (DetectCollidedObjects(gazeDirectionCentroid, DwelledObject.Far))
+                        {
+                            // Debug.Log($"Far gaze dwell detected! Far Visual Effect Triggered!!!!");
+                            visualFeedbackCount_far++;
+                            gazeDirections.Clear();
+                            headDirections.Clear();
+                        }
+                    }
+                }
+                else
+                {
+                    isDwellDetected = false;
+                    isSaccadeDetected = true;
+                    // Debug.Log("Saccades! Start the countdown of the visual effect deactivation!");
+                }
+            }
+
+            if (gazeDirections.Count == n_near && headDirections.Count == n_near)
+            {
+                float angularDeviation = CalculateAngularDeviation(gazeDirections, headDirections);
+
+                if (angularDeviation <= deviationThreshold)
+                {
+                    isSaccadeDetected = false;
+
+                    if (!isDwellDetected)
+                    {
+                        isDwellDetected = true;
+                        Vector3 gazeDirectionCentroid = GetCentroid(gazeDirections);
+                        // Debug.Log($"Near gaze dwell detected! The sample num is {gazeDirections.Count}");
+                        if (DetectCollidedObjects(gazeDirectionCentroid, DwelledObject.Near))
+                        {
+                            // Debug.Log($"Near gaze dwell detected! Near Visual Effect Triggered!!!!");
+                            visualFeedbackCount_near++;
+                        }
+                        gazeDirections.Clear();
+                        headDirections.Clear();
+                    }
+                }
+                else
+                {
+                    isDwellDetected = false;
+                    isSaccadeDetected = true;
+                    // Debug.Log("Saccades! Start the countdown of the visual effect deactivation!");
+                }
+            }  
+        }
+
+        // if we have enough samples for n
+        /*if (gazeDirections.Count == n && headDirections.Count == n)
         {
             float angularDeviation = CalculateAngularDeviation(gazeDirections, headDirections);
 
             if (angularDeviation <= deviationThreshold)
             {
                 isSaccadeDetected = false;
-                
+
                 if (!isDwellDetected)
                 {
                     isDwellDetected = true;
                     Debug.Log("Gaze dwell detected!" + isDwellDetected);
                     Vector3 gazeDirectionCentroid = GetCentroid(gazeDirections);
                     DetectCollidedObjects(gazeDirectionCentroid);
-                }   
+                }
             }
             else
             {
                 isSaccadeDetected = true;
                 isDwellDetected = false;
                 Debug.Log("Saccades! Start the countdown of the visual effect deactivation! " + isSaccadeDetected);
-
             }
-        }
+        }*/
     }
 
 
 
-    void DetectCollidedObjects(Vector3 gazeDirectionCentroid)
+    bool DetectCollidedObjects(Vector3 gazeDirectionCentroid, DwelledObject dwelledObject)
     {
         // Perform a RaycastAll from the gaze origin in the direction of the gaze
         RaycastHit[] hits = Physics.RaycastAll(gazeOrigin, gazeDirectionCentroid, Mathf.Infinity, layermask);
 
+        // Filter hits
+        if (dwelledObject == DwelledObject.Near)
+        {
+            hits = hits.Where(hit => hit.distance <= nearFarThreshold).ToArray();
+        }  
+        else
+        {
+            hits = hits.Where(hit => hit.distance > nearFarThreshold).ToArray();
+        }
+        
         // Process the detected game objects & Trigger Visual Effect
         foreach (RaycastHit hit in hits)
         {
             TriggerVisualEffect(hit);
         }
 
-        // Save the previous gaze hit objects (for EXCLUSIVE visual effect when the gaze on the map)
+        // Save the previous gaze hit objects (for EXCLUSIVE visual effect)
         if (hits.Length > 0)
         {
             prevHits = new RaycastHit[hits.Length];
             Array.Copy(hits, prevHits, hits.Length);
         }
 
-        // Detect New Dwell Again
+        // continue checking the dwell
         isDwellDetected = false;
-        gazeDirections.Clear();
-        headDirections.Clear();
 
+        return hits.Length > 0;
     }
 
     void TriggerVisualEffect(RaycastHit hit)
     {
-        // 1. Remove previous visual effect
-        // EXCLUSIVE visual effect when the gaze on the map 
-        // Check if the previous gaze hit on the map
+        // 1. Remove previous visual effect based on the DisplayMechanismType
         foreach (RaycastHit prevHit in prevHits)
         {
-            if (prevHit.collider != null && prevHit.transform.name.Contains("(Clone)"))
+            // if apply the EXCLUSIVE on map
+            if(displayMechanismType == DisplayMechanismType.Exclusive_Map)
             {
-                var prevHit_counterpart_gameobject = counterpartFinder.FindCounterpart(prevHit.transform.gameObject);
-                RemoveHighlight(prevHit.transform);
-                RemoveHighlight(prevHit_counterpart_gameobject.transform);
-                RemoveXRayVision(prevHit.transform);
-                RemoveXRayVision(prevHit_counterpart_gameobject.transform);
+                // Check if the previous gaze hit on the map
+                if (prevHit.collider != null && prevHit.transform.name.Contains("(Clone)"))
+                {
+                    var prevHit_counterpart_gameobject = counterpartFinder.FindCounterpart(prevHit.transform.gameObject);
+                    RemoveHighlight(prevHit.transform);
+                    RemoveHighlight(prevHit_counterpart_gameobject.transform);
+                    RemoveXRayVision(prevHit.transform);
+                    RemoveXRayVision(prevHit_counterpart_gameobject.transform);
+                }
+            }
+            // if apply the EXCLUSIVE on any triggerable objects
+            else if (displayMechanismType == DisplayMechanismType.Exclusive_All)
+            {
+                if (prevHit.collider != null)
+                {
+                    if(prevHit.transform.name.Contains("(Clone)"))
+                    {
+                        var prevHit_counterpart_gameobject = counterpartFinder.FindCounterpart(prevHit.transform.gameObject);
+                        RemoveHighlight(prevHit.transform);
+                        RemoveHighlight(prevHit_counterpart_gameobject.transform);
+                        RemoveXRayVision(prevHit.transform);
+                        RemoveXRayVision(prevHit_counterpart_gameobject.transform);
+                    }
+                    else
+                    {
+                        var prevHit_counterpart_gameobject = counterpartFinder.FindCounterpart(prevHit.transform.gameObject);
+                        RemoveHighlight(prevHit.transform);
+                        RemoveHighlight(prevHit_counterpart_gameobject.transform);
+                        RemoveXRayVision(prevHit.transform);
+                        RemoveXRayVision(prevHit_counterpart_gameobject.transform);
+                    }
+                }
+                
+            }
+            // if apply concurrent machanism
+            else
+            {
+                // do nothing with previous triggered visual effects
             }
         }
         
+        // 2. clear the prevHits after remove the visual effects on them
+        prevHits = new RaycastHit[0];
 
-        // 2. Trigger latest visual effect
+
+        // 3. Trigger latest visual effect
         // Find the counterpart
         counterpart_gameobject = counterpartFinder.FindCounterpart(hit.transform.gameObject);
         if (counterpart_gameobject != null)
@@ -300,7 +521,7 @@ public class GazeCue : MonoBehaviour
 
         // Return the average angular deviation
         float averageDeviation = sum / gazeArray.Length;
-        Debug.Log($"Average Angular Deviation: {averageDeviation}");
+        // Debug.Log($"Average Angular Deviation: {averageDeviation}");
         return averageDeviation;
     }
 

@@ -8,7 +8,6 @@ using UnityEngine.XR;
 public class DRTResponseRecord : MonoBehaviour
 {
     bool buttonDown_XRInput;
-    InputDevice device;
     InputDevice lefthand;
     bool triggerValue;
 
@@ -21,20 +20,6 @@ public class DRTResponseRecord : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        //// Find Controllers
-        //var RightHandDevices = new List<InputDevice>();
-        //InputDevices.GetDevicesAtXRNode(XRNode.RightHand, RightHandDevices);
-
-        //if (RightHandDevices.Count == 1)
-        //{
-        //    device = RightHandDevices[0];
-        //    Debug.Log(string.Format("Device name '{0}' with role '{1}'", device.name, device.role.ToString()));
-        //}
-        //else if (RightHandDevices.Count > 1)
-        //{
-        //    Debug.Log("Found more than one right hand!");
-        //}
-
         // Find Left Controller
         var LeftHandDevices = new List<InputDevice>();
         InputDevices.GetDevicesAtXRNode(XRNode.LeftHand, LeftHandDevices);
@@ -67,7 +52,6 @@ public class DRTResponseRecord : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        // if (device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.triggerButton, out triggerValue) && triggerValue)
         if (lefthand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.triggerButton, out triggerValue) && triggerValue)
         {
             if (!buttonDown_XRInput)
@@ -94,7 +78,6 @@ public class DRTResponseRecord : MonoBehaviour
                 Debug.Log("buttonDown_XRInput is held");
             }
         }
-        // else if (!(device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.triggerButton, out triggerValue) && triggerValue) && buttonDown_XRInput)
         else if (!(lefthand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.triggerButton, out triggerValue) && triggerValue) && buttonDown_XRInput)
         {
             // Button is released
